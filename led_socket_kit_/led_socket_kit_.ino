@@ -1,12 +1,46 @@
-#define LED 2 //connect LED to digital pin2
-void setup() {
-    // initialize the digital pin2 as an output.
-    pinMode(LED, OUTPUT);
+// Test Grove - Collision Sensor
+#define LED 2 //the onboard LED of Arduino or Seeeduino
+#define COLLISION_SENSOR 4//collision sensor is connected with D2 of Arduino
+
+void setup()
+{
+    pins_init();
 }
 
-void loop() {
-    digitalWrite(LED, HIGH);   // set the LED on
-    delay(500);               // for 500ms
-    digitalWrite(LED, LOW);   // set the LED off
-    delay(500);
+void loop()
+{
+    if(isTriggered())
+    {
+        turnOnLED();
+        delay(500);
+    }
+    else turnOffLED();
+}
+
+void pins_init()
+{
+    pinMode(LED,OUTPUT);
+    turnOffLED();
+    pinMode(COLLISION_SENSOR,INPUT);
+}
+
+boolean isTriggered()
+{
+    if(!digitalRead(COLLISION_SENSOR))
+    {
+        delay(10);
+        if(!digitalRead(COLLISION_SENSOR))
+        return true;//the collision sensor triggers
+    }
+    return false;
+}
+
+void turnOnLED()
+{
+    digitalWrite(LED,HIGH);//the LED is on
+}
+
+void turnOffLED()
+{
+    digitalWrite(LED,LOW);//the LED is off
 }

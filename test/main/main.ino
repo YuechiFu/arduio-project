@@ -2,16 +2,20 @@
 #include <rgb_lcd.h>             // 加载lcd 屏幕
 #include <Ultrasonic.h>          // 加载超声波传感器库
 #include <Adafruit_NeoPixel.h>   // 加载led库
+#include <SCoop.h>               // 加载异步SCoop库
 #ifdef __AVR__
   #include <avr/power.h>
 #endif
-
-Ultrasonic ultrasonic(7);
-#define LED   2                       // 定义 led socket kit 接口 D2
-#define PIXELPIN   6                 // 定义 led RGB stick  接口 D6  
-#define InstanceSENSOR  4
+            
+#define LED               2       // led socket kit         D2 
+#define CollisionSENSOR   4       // 碰撞传感器               D4
+#define InstanceSENSOR    5       // 0.5-5cm 距离中断传感器    D5
+#define PIXELPIN          6       // led RGB stick           D6 
+#define UltrasonicSENSOR  7       // 超声波传感器              D7
+    
 
 rgb_lcd lcd;
+Ultrasonic ultrasonic(UltrasonicSENSOR); 
 
 //全彩LED的型号和参数
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(15, PIXELPIN, NEO_GRB + NEO_KHZ800);
@@ -24,7 +28,6 @@ int TIME = 15 ; // 总时间
 int limitTime = 15 ; // 倒计时开始时间
 int Total = 0 ;
 int Score = 0 ; 
-
 
 
 
@@ -51,8 +54,9 @@ void setLedStick(int sec , int R , int G , int B){
  /* *******************倒计时函数*/
 
 void getTime() {  
- if(TIME <= limitTime){
-    setLedStick(TIME-1,0,0,0);
+ if(TIME < limitTime){
+    setLedStick(TIME,0,0,0);
+    lcd.setCursor(9,1); lcd.print("TIME:");  lcd.print(TIME,DEC);
     if( TIME == 0 ){
       lcd.setRGB(255,0,0);
       for(int i=0 ; i<15 ; i++){strip.setPixelColor(i,255,0,0);}
@@ -63,72 +67,102 @@ void getTime() {
 }
 
 
-/* ********************距离触发*/
+/* ********************超声波距离检测****/
 
 void showDistance(){
     long RangeInCentimeters;
     RangeInCentimeters = ultrasonic.MeasureInCentimeters();
-    if(TIME >= 0) getTime();
     if(RangeInCentimeters<20){
         Total = Total + 1;
         if(RangeInCentimeters < activeDistance){
           Score = Score + 1;
           digitalWrite(LED, HIGH);
-        }else{digitalWrite(LED, LOW);}
+          sleep(200);
+        }else{
+          digitalWrite(LED, LOW);}
     }else{
       digitalWrite(LED, LOW);
     }
-    lcd.clear();
+    // lcd.clear();
     lcd.setCursor(0,0);  lcd.print("Total:"); lcd.print(Total,DEC);
     lcd.setCursor(0,1);  lcd.print("Score:"); lcd.print(Score,DEC);
-    lcd.setCursor(10,1); lcd.print("TIME:");  lcd.print(TIME,DEC);
-    delay(1000);
+  
   }
 
+/* ******************** 震动检测 ****/
+boolean collisionTriggered(){
+   if(!digitalRead(CollisionSENSOR))
+    {
+        sleep(50);
+        if(!digitalRead(CollisionSENSOR))
+        return true;//the collision sensor triggers
+    }
+    return false;
+}
+
+
+
+
+//*************** 倒计时异步任务 **********
+
+defineTask(TaskTimeTip);
+ void TaskTimeTip::setup()
+ {
+  
+ }
+ void TaskTimeTip::loop()
+ {
+  if(TIME >= 0) getTime();
+  sleep(1000);
+ }
+
+ //************** 超声波检测异步任务 *********
+defineTask(TaskDistance);
+ void TaskDistance::setup()
+ {
+  
+ }
+ void TaskDistance::loop()
+ {
+    showDistance();
+    sleep(100);
+ }
+
+
+//************** 碰撞传感器检测异步任务 ******
+
+defineTask(TaskCollisionCheck);
+void TaskCollisionCheck::setup(){
+  // Serial.begin(9600);
+  pinMode(CollisionSENSOR,INPUT);
+}
+void TaskCollisionCheck::loop(){
+  // Serial.println("checking....");
+  if(collisionTriggered()){
+    digitalWrite(LED, HIGH);                // 打开小灯泡
+    sleep(200);
+  }else{
+    digitalWrite(LED, LOW);
+  }
+}
+
+// 全局初始化
 
 void setup()
 {
     // set up the LCD's number of columns and rows:
     lcd.begin(16, 2);
     lcd.setRGB(50 ,255,220);
-    // pinMode(LED, OUTPUT);
     initialLedStick();
     
-    Serial.begin(115200);
-    pinMode(InstanceSENSOR,INPUT);
-
     Serial.begin(9600);
     pinMode(LED, OUTPUT);
+    mySCoop.start();
+    
     
 }
 
-void loop()
-{   
-    showDistance();
-  //  if(TIME >= 0) getTime();
-//  short val=0;
-//    val=digitalRead(InstanceSENSOR);
-//    Serial.print("val=");
-//    Serial.println((int)val);
-//    if(0==val)
-//    {
-//        Serial.println("Sensor is triggered!!");
-//    }
-//    delay(50);
-
-  int sensorState = digitalRead(A0);
-    Serial.println(sensorState);
-    delay(100);
-    if(sensorState == HIGH)
-    {
-        digitalWrite(LED,HIGH);
-    }
-    else
-    {
-        digitalWrite(LED,LOW);
-    }
-        
-}
+void loop(){yield();}
 
 /***
  **
@@ -185,3 +219,34 @@ void loop()
   yield();
 }
  */
+
+//*************  近距离感应器检测异步任务 ******
+/* defineTask(TaskMiniDistance);
+void TaskMiniDistance::setup(){
+  Serial.begin(115200);
+  pinMode(InstanceSENSOR,INPUT);
+}
+void TaskMiniDistance::loop(){
+    short val=0;
+    val=digitalRead(InstanceSENSOR);
+    Serial.print("val=");
+    Serial.println((int)val);
+    if(0==val)
+    {
+        Serial.println("Sensor is triggered!!");
+        sleep(2000);
+    }
+    sleep(100);
+} */
+
+/* ********************压电振动检测*****/
+
+/* void piezoVibra(){
+   int sensorState = digitalRead(A0);
+    Serial.println(sensorState);
+    delay(500);
+    if(sensorState == HIGH)
+    {digitalWrite(LED,HIGH);}
+    else
+    { digitalWrite(LED,LOW);}
+} */
