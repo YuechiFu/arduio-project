@@ -133,7 +133,8 @@ defineTask(TaskDistance);
         digitalWrite(LED, HIGH);
         IsScore = true ; 
         lcd.setCursor(0,1);  lcd.print("Score:"); lcd.print(Score,DEC);
-        sleep(2000)
+        sleep(2000);
+        IsScore = false ; 
     }else{
       digitalWrite(LED, LOW);
         IsScore = false ; 
