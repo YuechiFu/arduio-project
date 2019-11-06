@@ -126,17 +126,18 @@ defineTask(TaskDistance);
     showDistance();
     if(!IsShoot && Distance < checkDistance ){
       Total = Total + 1;
+      lcd.setCursor(0,0);  lcd.print("Total:"); lcd.print(Total,DEC);
     }
-    if(Distance < activeDistance){
+    if(Distance < activeDistance && !IsScore){
         Score = Score + 1;
         digitalWrite(LED, HIGH);
         IsScore = true ; 
+        lcd.setCursor(0,1);  lcd.print("Score:"); lcd.print(Score,DEC);
+        sleep(2000)
     }else{
       digitalWrite(LED, LOW);
         IsScore = false ; 
     }
-    lcd.setCursor(0,0);  lcd.print("Total:"); lcd.print(Total,DEC);
-    lcd.setCursor(0,1);  lcd.print("Score:"); lcd.print(Score,DEC);
     sleep(200);
     
  }
@@ -157,6 +158,7 @@ void TaskCollisionCheck::loop(){
     Shake = true ; 
     Total = Total + 1 ;
     IsShoot = true ;
+    lcd.setCursor(0,0);  lcd.print("Total:"); lcd.print(Total,DEC);
     sleep(2000);
   }else{
     digitalWrite(LED, LOW); 
