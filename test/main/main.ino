@@ -2,16 +2,20 @@
 #include <rgb_lcd.h>             // 加载lcd 屏幕
 #include <Ultrasonic.h>          // 加载超声波传感器库
 #include <Adafruit_NeoPixel.h>   // 加载led库
+#include <TimerDown.h>           // 加载异步TimerDown库
+#include <TimerUp.h>             // 加载异步TimerUp库
+// #include <SchedulerARMAVR.h>     // 加载异步SchedulerARMAVR库
+#include <IOFilter.h>            // 加载IOFilterp库
 #include <SCoop.h>               // 加载异步SCoop库
 #ifdef __AVR__
   #include <avr/power.h>
 #endif
             
-#define LED               2       // led socket kit         D2 
-#define CollisionSENSOR   4       // 碰撞传感器               D4
-#define InstanceSENSOR    5       // 0.5-5cm 距离中断传感器    D5
-#define PIXELPIN          6       // led RGB stick           D6 
-#define UltrasonicSENSOR  7       // 超声波传感器              D7
+#define BtnAction         2       // led socket kit         D2 
+#define LED               4       // led socket kit         D4 
+#define UltrasonicSENSOR  5       // 超声波传感器              D5
+#define CollisionSENSOR   6       // 碰撞传感器               D6
+#define PIXELPIN          8       // led RGB stick            D8 
     
 
 rgb_lcd lcd;
@@ -20,18 +24,25 @@ Ultrasonic ultrasonic(UltrasonicSENSOR);
 //全彩LED的型号和参数
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(15, PIXELPIN, NEO_GRB + NEO_KHZ800);
 
-
-
-
-const int activeDistance = 5;
+// 初始化变量
+const int checkDistance  = 20 ;
+const int activeDistance = 8;
 int TIME = 15 ; // 总时间
 int limitTime = 15 ; // 倒计时开始时间
 int Total = 0 ;
 int Score = 0 ; 
+long Distance = 300 ;
+boolean Shake = false ;
+boolean IsShoot = false ;
+boolean IsScore = false ;
 
 
 
-/* ********************初始化灯条*/
+/*****************************************************/
+/************** Methods VOID  ***************/
+/*****************************************************/
+
+/*初始化灯条*/
 
 void initialLedStick(){
   #if defined (__AVR_ATtiny85__)
@@ -43,7 +54,7 @@ void initialLedStick(){
     strip.show(); // Initialize all strip to 'off'
 }
 
-/* ********************灯条亮倒计时*/
+/*灯条亮倒计时*/
 
 void setLedStick(int sec , int R , int G , int B){  
  strip.setPixelColor(sec, strip.Color(R,G,B)); 
@@ -51,7 +62,7 @@ void setLedStick(int sec , int R , int G , int B){
  }
 
 
- /* *******************倒计时函数*/
+ /*倒计时函数*/
 
 void getTime() {  
  if(TIME < limitTime){
@@ -67,43 +78,31 @@ void getTime() {
 }
 
 
-/* ********************超声波距离检测****/
+/*超声波距离检测****/
 
 void showDistance(){
-    long RangeInCentimeters;
-    RangeInCentimeters = ultrasonic.MeasureInCentimeters();
-    if(RangeInCentimeters<20){
-        Total = Total + 1;
-        if(RangeInCentimeters < activeDistance){
-          Score = Score + 1;
-          digitalWrite(LED, HIGH);
-          sleep(200);
-        }else{
-          digitalWrite(LED, LOW);}
-    }else{
-      digitalWrite(LED, LOW);
-    }
-    // lcd.clear();
-    lcd.setCursor(0,0);  lcd.print("Total:"); lcd.print(Total,DEC);
-    lcd.setCursor(0,1);  lcd.print("Score:"); lcd.print(Score,DEC);
-  
+    Distance = ultrasonic.MeasureInCentimeters();
   }
 
-/* ******************** 震动检测 ****/
+/*震动检测 ****/
 boolean collisionTriggered(){
    if(!digitalRead(CollisionSENSOR))
     {
-        sleep(50);
-        if(!digitalRead(CollisionSENSOR))
+      if(!digitalRead(CollisionSENSOR))
         return true;//the collision sensor triggers
     }
     return false;
 }
 
+boolean checkScore(){
 
+}
 
+/*****************************************************/
+/**************Mutiple Process Initial ***************/
+/*****************************************************/
 
-//*************** 倒计时异步任务 **********
+// 倒计时异步任务 
 
 defineTask(TaskTimeTip);
  void TaskTimeTip::setup()
@@ -116,7 +115,7 @@ defineTask(TaskTimeTip);
   sleep(1000);
  }
 
- //************** 超声波检测异步任务 *********
+// 超声波测距异步任务 
 defineTask(TaskDistance);
  void TaskDistance::setup()
  {
@@ -125,25 +124,45 @@ defineTask(TaskDistance);
  void TaskDistance::loop()
  {
     showDistance();
-    sleep(100);
+    if(!IsShoot && Distance < checkDistance ){
+      Total = Total + 1;
+    }
+    if(Distance < activeDistance){
+        Score = Score + 1;
+        digitalWrite(LED, HIGH);
+        IsScore = true ; 
+    }else{
+      digitalWrite(LED, LOW);
+        IsScore = false ; 
+    }
+    lcd.setCursor(0,0);  lcd.print("Total:"); lcd.print(Total,DEC);
+    lcd.setCursor(0,1);  lcd.print("Score:"); lcd.print(Score,DEC);
+    sleep(200);
+    
  }
 
 
-//************** 碰撞传感器检测异步任务 ******
+
+
+
+// 碰撞传感器检测异步任务 
 
 defineTask(TaskCollisionCheck);
 void TaskCollisionCheck::setup(){
-  // Serial.begin(9600);
-  pinMode(CollisionSENSOR,INPUT);
 }
 void TaskCollisionCheck::loop(){
   // Serial.println("checking....");
   if(collisionTriggered()){
-    digitalWrite(LED, HIGH);                // 打开小灯泡
-    sleep(200);
+    digitalWrite(LED, HIGH);           // 打开小灯泡
+    Shake = true ; 
+    Total = Total + 1 ;
+    IsShoot = true ;
+    sleep(2000);
   }else{
-    digitalWrite(LED, LOW);
-  }
+    digitalWrite(LED, LOW); 
+    Shake = false ; 
+    IsShoot = false ;
+  } 
 }
 
 // 全局初始化
@@ -154,9 +173,8 @@ void setup()
     lcd.begin(16, 2);
     lcd.setRGB(50 ,255,220);
     initialLedStick();
-    
-    Serial.begin(9600);
     pinMode(LED, OUTPUT);
+    pinMode(CollisionSENSOR,INPUT);
     mySCoop.start();
     
     
