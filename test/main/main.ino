@@ -2,16 +2,16 @@
 #include <rgb_lcd.h>             // 加载lcd 屏幕
 #include <Ultrasonic.h>          // 加载超声波传感器库
 #include <Adafruit_NeoPixel.h>   // 加载led库
-#include <TimerDown.h>           // 加载异步TimerDown库
-#include <TimerUp.h>             // 加载异步TimerUp库
-// #include <SchedulerARMAVR.h>     // 加载异步SchedulerARMAVR库
-#include <IOFilter.h>            // 加载IOFilterp库
+// #include <TimerDown.h>           // 加载异步TimerDown库
+// #include <TimerUp.h>             // 加载异步TimerUp库
+// // #include <SchedulerARMAVR.h>     // 加载异步SchedulerARMAVR库
+// #include <IOFilter.h>            // 加载IOFilterp库
 #include <SCoop.h>               // 加载异步SCoop库
 #ifdef __AVR__
   #include <avr/power.h>
 #endif
             
-#define BtnAction         2       // led socket kit         D2 
+#define RestartBTn        2       // led socket kit         D2 
 #define LED               4       // led socket kit         D4 
 #define UltrasonicSENSOR  5       // 超声波传感器              D5
 #define CollisionSENSOR   6       // 碰撞传感器               D6
@@ -41,6 +41,9 @@ boolean IsScore = false ;
 /*****************************************************/
 /************** Methods VOID  ***************/
 /*****************************************************/
+
+/* 重启函数 */
+void(* resetFunc) (void) = 0;
 
 /*初始化灯条*/
 
@@ -75,7 +78,8 @@ void getTime() {
     } 
   } 
   TIME = TIME - 1;
-}
+  }
+
 
 
 /*超声波距离检测****/
@@ -178,12 +182,20 @@ void setup()
     initialLedStick();
     pinMode(LED, OUTPUT);
     pinMode(CollisionSENSOR,INPUT);
+    pinMode(RestartBTn, INPUT);
     mySCoop.start();
     
     
 }
 
-void loop(){yield();}
+void loop(){
+  yield();
+  int buttonState = digitalRead(RestartBTn);
+    if (buttonState == HIGH) {
+        delay(500);
+        resetFunc();
+    }
+}
 
 /***
  **
