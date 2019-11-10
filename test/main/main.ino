@@ -2,16 +2,42 @@
 #include <rgb_lcd.h>             // 加载lcd 屏幕
 #include <Ultrasonic.h>          // 加载超声波传感器库
 #include <Adafruit_NeoPixel.h>   // 加载led库
-// #include <TimerDown.h>           // 加载异步TimerDown库
-// #include <TimerUp.h>             // 加载异步TimerUp库
-// // #include <SchedulerARMAVR.h>     // 加载异步SchedulerARMAVR库
-// #include <IOFilter.h>            // 加载IOFilterp库
 #include <SCoop.h>               // 加载异步SCoop库
+#include "KT403A_Player.h"
 #ifdef __AVR__
   #include <avr/power.h>
+  #include <SoftwareSerial.h>
+  SoftwareSerial SSerial(2, 3); // RX, TX
+  #define COMSerial SSerial
+  #define ShowSerial Serial 
+  KT403A<SoftwareSerial> Mp3Player;
 #endif
-            
-#define RestartBTn        2       // led socket kit         D2 
+
+
+#ifdef ARDUINO_SAMD_VARIANT_COMPLIANCE
+#define COMSerial Serial1
+#define ShowSerial SerialUSB 
+
+KT403A<Uart> Mp3Player;
+#endif
+
+#ifdef ARDUINO_ARCH_STM32F4
+#define COMSerial Serial
+#define ShowSerial SerialUSB 
+
+KT403A<HardwareSerial> Mp3Player;
+#endif
+
+static uint8_t recv_cmd[8] = {};
+
+
+
+
+
+
+
+
+#define RestartBTn        3       // led socket kit         D2 
 #define LED               4       // led socket kit         D4 
 #define UltrasonicSENSOR  5       // 超声波传感器              D5
 #define CollisionSENSOR   6       // 碰撞传感器               D6
@@ -21,8 +47,15 @@
 rgb_lcd lcd;
 Ultrasonic ultrasonic(UltrasonicSENSOR); 
 
+
+
+
 //全彩LED的型号和参数
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(15, PIXELPIN, NEO_GRB + NEO_KHZ800);
+
+
+
+
 
 // 初始化变量
 const int checkDistance  = 20 ;
@@ -101,10 +134,162 @@ boolean collisionTriggered(){
 boolean checkScore(){
 
 }
+// MP3 Print
+void printMenu()
+{
+  Serial.println("Grove - Serial MP3 Demo");
+  Serial.println(
+        "Input command:\r\n\r\n"
+        "P[ ] play music by default index\r\n"
+        "Pm[ ] play music in MP3 folder by index\r\n"
+        "Pf[ ][ ] play music by specify folder and index\r\n"        
+        "p Pause\r\n"
+        "R Resume\r\n"
+        "N Next\r\n"
+        "L Previous\r\n"
+        "l[] LoopFolder\r\n"
+        "I Increase volume\r\n"
+        "D Decrease volumern\r\n"
+        "Other keys for print menu\r\n");
+    delay(100);
+}
+
+// MP3 loop
+void mp3Loop(){
+    uint8_t len = 0;
+    uint8_t i;
+
+    if(Serial.available())
+    {
+        char chr = '\0';
+        while(chr != '\n')  // Blockly read data from serial monitor
+        {
+            chr = Serial.read();
+            // Serial.print(chr);
+            recv_cmd[len++] = chr;        
+        }
+    }
+
+    if(len > 0)
+    {
+        // Print reveiced data    
+        // Serial.print("Received cmd: ");   
+        // for(i = 0; i < len; i++) {
+        //     Serial.print(recv_cmd[i]);
+        //     Serial.print(" ");
+        // }
+        // Serial.println();
+            
+        switch (recv_cmd[0])
+        {
+            case 'P':
+                if(recv_cmd[1] == 'm') 
+                {
+                    /** 
+                      * Play music in "MP3" folder by index 
+                      * example:
+                      * "Pm1" -> ./MP3/0001.mp3
+                    */
+                    Mp3Player.playSongMP3(recv_cmd[2] - '0');
+                    Serial.print("Play ");
+                    Serial.write(recv_cmd[2]);
+                    Serial.println(".mp3 in MP3 folder");
+                } 
+                else if(recv_cmd[1] == 'f')
+                {
+                    /** 
+                      * Play specify folder and music
+                      * example:
+                      * "Pf11" -> ./01/001***.mp3
+                    */
+                    Mp3Player.playSongSpecify(recv_cmd[2] - '0', recv_cmd[3] - '0');
+                    Serial.print("Play ");
+                    Serial.write(recv_cmd[3]);
+                    Serial.print("xxx.mp3");
+                    Serial.print(" in folder ");
+                    Serial.write(recv_cmd[2]);
+                    Serial.println();
+                    
+                } 
+                else
+                {
+                    /** 
+                      * Play music by default index
+                      * example:
+                      * "P1" -> ./***.mp3
+                    */                
+                    Mp3Player.playSongIndex(recv_cmd[1] - '0');
+                    Serial.print("Play xxx.MP3 by index ");
+                    Serial.write(recv_cmd[1]);
+                    Serial.println();
+                }            
+                // Serial.println("Specify the music index to play");
+                break;
+            case 'p':
+                Mp3Player.pause();            
+                Serial.println("Pause the MP3 player");
+                break;
+            case 'R':            
+                Mp3Player.play();
+                Serial.println("Resume the MP3 player");
+                break;
+            case 'N':            
+                Mp3Player.next();
+                Serial.println("Play the next song");
+                break;
+            case 'L':
+                Mp3Player.previous();
+                Serial.println("Play the previous song");
+                break;
+            case 'l':
+                /** 
+                      * Play music by default index
+                      * example:
+                      * "l1" -> l1/
+                */                
+                Mp3Player.loopFolder(recv_cmd[1]-'0');
+                Serial.print("Play loop for all the songs in the floder");
+                Serial.write(recv_cmd[1]);
+                Serial.println();
+                break;
+            case 'I':
+                Mp3Player.volumeUp();
+                Serial.println("Increase volume");
+                break;
+            case 'D':
+                Mp3Player.volumeDown();
+                Serial.println("Decrease volume");
+                break;
+            default:
+                printMenu();
+                break;
+        }
+
+    }    
+    delay(200);
+}
+
+// MP3 Setup 
+void mp3Setup(){
+  ShowSerial.begin(9600);
+  COMSerial.begin(9600);
+  while (!ShowSerial);
+  while (!COMSerial);
+  Mp3Player.init(COMSerial);
+  Mp3Player.play();
+
+  printMenu();
+}
+
 
 /*****************************************************/
 /**************Mutiple Process Initial ***************/
 /*****************************************************/
+
+
+// MP3 异步任务
+
+
 
 // 倒计时异步任务 
 
@@ -147,10 +332,6 @@ defineTask(TaskDistance);
     
  }
 
-
-
-
-
 // 碰撞传感器检测异步任务 
 
 defineTask(TaskCollisionCheck);
@@ -172,6 +353,7 @@ void TaskCollisionCheck::loop(){
   } 
 }
 
+
 // 全局初始化
 
 void setup()
@@ -183,9 +365,8 @@ void setup()
     pinMode(LED, OUTPUT);
     pinMode(CollisionSENSOR,INPUT);
     pinMode(RestartBTn, INPUT);
+    mp3Setup();
     mySCoop.start();
-    
-    
 }
 
 void loop(){
@@ -195,6 +376,7 @@ void loop(){
         delay(500);
         resetFunc();
     }
+    // mp3Loop();
 }
 
 /***
